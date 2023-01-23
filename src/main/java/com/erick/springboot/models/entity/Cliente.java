@@ -5,14 +5,18 @@ import java.util.Date;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Temporal;
 import jakarta.persistence.TemporalType;
 import javax.validation.constraints.*;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
 @Table(name="clientes")
@@ -41,8 +45,16 @@ public class Cliente implements Serializable {
 	@Temporal(TemporalType.DATE)
 	private Date createAt;
 	
-	private String foto;
+	private  String foto;
 	
+	@ManyToOne(fetch=FetchType.LAZY)
+	@JoinColumn(name="region_id")
+	@JsonIgnoreProperties({"hibernateLazyInitializer","handler"})
+	@NotNull
+	private Region region;
+	
+	
+
 	public Long getId() {
 		return id;
 	}
@@ -90,6 +102,15 @@ public class Cliente implements Serializable {
 	public void setFoto(String foto) {
 		this.foto = foto;
 	}
+	
+	public Region getRegion() {
+		return region;
+	}
+
+	public void setRegion(Region region) {
+		this.region = region;
+	}
+
 
 	private static final long serialVersionUID = 1L;
 

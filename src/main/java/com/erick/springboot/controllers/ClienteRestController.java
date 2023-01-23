@@ -1,23 +1,28 @@
 package com.erick.springboot.controllers;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.net.MalformedURLException;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.validation.Valid;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -36,7 +41,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.erick.springboot.models.entity.Cliente;
+import com.erick.springboot.models.entity.Region;
 import com.erick.springboot.models.services.IClienteService;
+import com.erick.springboot.models.services.IUploadFileService;
 
 @CrossOrigin(origins = { "http://localhost:4200" })
 @RestController
@@ -46,18 +53,23 @@ public class ClienteRestController {
 	@Autowired
 	private IClienteService clienteService;
 
+	@Autowired
+	private IUploadFileService uploadService;
+
+	private final Logger log = LoggerFactory.getLogger(ClienteRestController.class);
+
 	@GetMapping("/clientes")
 	public List<Cliente> index() {
 		return clienteService.findAll();
 	}
-	
+
 	@GetMapping("/clientes/page/{page}")
 	public Page<Cliente> index(@PathVariable Integer page) {
 		Pageable pageable = PageRequest.of(page, 10);
 		return clienteService.findAll(pageable);
 	}
 
-	@GetMapping("/clientes/{id}")
+	@GetMapping("/clientes/id/{id}")
 	public ResponseEntity<?> show(@PathVariable Long id) {
 
 		Cliente cliente = null;
@@ -136,7 +148,7 @@ public class ClienteRestController {
 		return new ResponseEntity<Map<String, Object>>(response, HttpStatus.CREATED);
 	}
 
-	@PutMapping("/clientes/{id}")
+	@PutMapping("/clientes/id/{id}")
 	public ResponseEntity<?> update(@Valid @RequestBody Cliente cliente, BindingResult result, @PathVariable Long id) {
 
 		Cliente clienteActual = null;
@@ -195,6 +207,7 @@ public class ClienteRestController {
 		clienteActual.setApellido(cliente.getApellido());
 		clienteActual.setNombre(cliente.getNombre());
 		clienteActual.setEmail(cliente.getEmail());
+		clienteActual.setRegion(cliente.getRegion());
 
 		try {
 			clienteService.save(clienteActual);
@@ -209,17 +222,24 @@ public class ClienteRestController {
 		return new ResponseEntity<Map<String, Object>>(response, HttpStatus.CREATED);
 	}
 
-	@DeleteMapping("/clientes/{id}")
+	@DeleteMapping("/clientes/id/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public ResponseEntity<?> delete(@PathVariable Long id) {
 
 		Map<String, Object> response = new HashMap<>();
 
 		try {
+			Cliente cliente = clienteService.findById(id);
+
+			String nombreFotoAnterior = cliente.getFoto();
+
+			uploadService.eliminar(nombreFotoAnterior);
+
 			clienteService.delete(id);
-		} catch (DataAccessException e) {
+
+		} catch (DataAccessException | IOException e) {
 			response.put("Mensaje", "error en la conexion");
-			response.put("Exceptin", e.getClass());
+			response.put("Exception", e.getClass());
 		}
 
 		response.put("Mensaje", "Cliente eliminado con exito");
@@ -227,33 +247,67 @@ public class ClienteRestController {
 
 	}
 
-	
-	public ResponseEntity<?> upload(@RequestParam("archivo")MultipartFile archivo, @RequestParam("id") Long id){
+	@PostMapping("/clientes/upload")
+	public ResponseEntity<?> upload(@RequestParam("archivo") MultipartFile archivo, @RequestParam("id") Long id) {
 
-		Map<String,Object> response = new HashMap<>();
-		
+		Map<String, Object> response = new HashMap<>();
+
 		Cliente cliente = clienteService.findById(id);
-		
-		if(!archivo.isEmpty()) {
-			String nombreArchivo = archivo.getOriginalFilename();
-			Path rutaArchivo = Paths.get("upload").resolve(nombreArchivo).toAbsolutePath();
-			
+
+		String nombreArchivo = "";
+
+		if (!archivo.isEmpty()) {
+
 			try {
-				Files.copy(archivo.getInputStream(), rutaArchivo);
-			} catch (IOException e) {				// 
-				e.printStackTrace();
+
+				nombreArchivo = uploadService.copiar(archivo);
+
+				String nombreFotoAnterior = cliente.getFoto();
+
+				uploadService.eliminar(nombreFotoAnterior);
+
+				cliente.setFoto(nombreArchivo);
+				clienteService.save(cliente);
+
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				response.put("Error", "Error al subir el archivo");
+				response.put("Exception", e.getMessage().concat(":") + e.getCause());
 			}
-			
-			cliente.setFoto(nombreArchivo);
-			
-			clienteService.save(cliente);
-			
-			response.put("cliente", cliente);
-			response.put("Mensaje", "Archivo subido correctamente "+rutaArchivo);
+		} else {
+
+			response.put("Error", "El archivo esta vacío");
+			return new ResponseEntity<Map<String, Object>>(response, HttpStatus.BAD_REQUEST);
 		}
-		
-		return new ResponseEntity<Map<String,Object>>(response, HttpStatus.CREATED);
+
+		response.put("Mensaje", "Imagen subida correctamente ");
+		return new ResponseEntity<Map<String, Object>>(response, HttpStatus.CREATED);
+
+	}
+
+	@GetMapping("/uploads/img/{nombreFoto:.+}")
+	public ResponseEntity<Resource> verFoto(@PathVariable String nombreFoto) {
+
+		Resource recurso = null;
+
+		try {
+			recurso = uploadService.cargar(nombreFoto);
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		HttpHeaders cabecera = new HttpHeaders();
+		cabecera.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + recurso.getFilename() + "\"");
+
+		return new ResponseEntity<Resource>(recurso, cabecera, HttpStatus.OK);
+	}
+
+	
+	@GetMapping("/clientes/regiones")
+	public List<Region>listarRegiones(){
+
+		return clienteService.findAllRegiones();
 		
 	}
-	
 }
