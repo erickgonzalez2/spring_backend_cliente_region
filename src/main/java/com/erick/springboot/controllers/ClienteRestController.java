@@ -56,7 +56,6 @@ public class ClienteRestController {
 	@Autowired
 	private IUploadFileService uploadService;
 
-	private final Logger log = LoggerFactory.getLogger(ClienteRestController.class);
 
 	@GetMapping("/clientes")
 	public List<Cliente> index() {
