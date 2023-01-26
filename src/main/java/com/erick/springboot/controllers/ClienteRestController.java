@@ -13,8 +13,6 @@ import java.util.regex.Pattern;
 
 import javax.validation.Valid;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 
@@ -45,7 +43,7 @@ import com.erick.springboot.models.entity.Region;
 import com.erick.springboot.models.services.IClienteService;
 import com.erick.springboot.models.services.IUploadFileService;
 
-@CrossOrigin(origins = { "http://localhost:4200" })
+@CrossOrigin(origins = { "http://localhost:4200","*" })
 @RestController
 @RequestMapping("/api")
 public class ClienteRestController {

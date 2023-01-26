@@ -37,7 +37,7 @@ public class WebSecurityConfig {
 				.and()
 				.csrf().disable()
 				.authorizeHttpRequests()
-				.requestMatchers("/api/uploads/img/**")
+				.requestMatchers("/api/uploads/**")
 				.permitAll()
 				.anyRequest()
 				.authenticated()				
